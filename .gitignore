@@ -2,7 +2,9 @@
 **/service_account.json
 **/client_secret.json
 **/token.json
+**/token.pickle
 credentials/*.json
+credentials/*.pickle
 .env
 .env.*
 !.env.example

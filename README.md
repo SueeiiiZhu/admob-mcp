@@ -20,7 +20,7 @@
 
 - Python >= 3.10
 - Google Cloud 项目，已启用 [AdMob API](https://console.cloud.google.com/apis/library/admob.googleapis.com)
-- Service Account 密钥文件（[创建方式](https://console.cloud.google.com/iam-admin/serviceaccounts)）
+- OAuth 2.0 Client ID（Desktop 类型）
 
 ## 安装
 
@@ -50,15 +50,30 @@ uv pip install -e .
 |------|------|
 | `mcp[cli]` | MCP SDK + CLI 工具（含 uvicorn、starlette） |
 | `google-api-python-client` | Google API 客户端（AdMob API v1） |
-| `google-auth` | Google Service Account 认证 |
+| `google-auth` | Google OAuth2 认证 |
+| `google-auth-oauthlib` | OAuth2 授权流程（仅首次授权时需要） |
 | `python-dotenv` | 从 `.env` 文件加载环境变量 |
 
 ## 配置
 
-### 1. 放置 Service Account 密钥
+### 1. 获取 OAuth 授权令牌
+
+首次使用需要完成 OAuth 授权：
 
 ```bash
-cp /path/to/your-service-account.json credentials/service_account.json
+# 将 OAuth Client ID 密钥放到 credentials 目录
+cp /path/to/client_secret.json credentials/client_secret.json
+
+# 运行授权流程（会打开浏览器）
+python auth_flow.py
+```
+
+授权完成后会生成 `credentials/token.pickle`。
+
+如果你已有 `token.pickle` 文件，直接复制即可：
+
+```bash
+cp /path/to/token.pickle credentials/token.pickle
 ```
 
 ### 2. 设置环境变量
@@ -71,7 +86,7 @@ cp .env.example .env
 
 ```env
 # 必填
-GOOGLE_SERVICE_ACCOUNT_KEY=credentials/service_account.json
+GOOGLE_TOKEN_FILE=credentials/token.pickle
 ADMOB_ACCOUNT_ID=pub-XXXXXXXXXXXXXXXX
 
 # 可选（HTTP 模式）
@@ -112,7 +127,7 @@ python server.py --transport sse
       "command": ".venv/bin/python",
       "args": ["server.py"],
       "env": {
-        "GOOGLE_SERVICE_ACCOUNT_KEY": "credentials/service_account.json",
+        "GOOGLE_TOKEN_FILE": "credentials/token.pickle",
         "ADMOB_ACCOUNT_ID": "pub-XXXXXXXXXXXXXXXX"
       }
     }
@@ -131,7 +146,7 @@ python server.py --transport sse
       "command": "/absolute/path/to/admob-mcp/.venv/bin/python",
       "args": ["/absolute/path/to/admob-mcp/server.py"],
       "env": {
-        "GOOGLE_SERVICE_ACCOUNT_KEY": "/absolute/path/to/credentials/service_account.json",
+        "GOOGLE_TOKEN_FILE": "/absolute/path/to/credentials/token.pickle",
         "ADMOB_ACCOUNT_ID": "pub-XXXXXXXXXXXXXXXX"
       }
     }

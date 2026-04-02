@@ -1,8 +1,9 @@
 import os
+import pickle
 import logging
 from pathlib import Path
 
-from google.oauth2 import service_account
+from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 
 logger = logging.getLogger(__name__)
@@ -14,23 +15,31 @@ SCOPES = [
 ]
 
 
-def _get_credentials() -> service_account.Credentials:
-    """Load Service Account credentials from JSON key file."""
-    key_path = Path(
+def _get_credentials():
+    """Load OAuth2 user credentials from token.pickle, auto-refreshing if needed."""
+    token_path = Path(
         os.getenv(
-            "GOOGLE_SERVICE_ACCOUNT_KEY",
-            str(BASE_DIR / "credentials" / "service_account.json"),
+            "GOOGLE_TOKEN_FILE",
+            str(BASE_DIR / "credentials" / "token.pickle"),
         )
     ).expanduser()
-    if not key_path.exists():
+
+    if not token_path.exists():
         raise FileNotFoundError(
-            "Service account key file not found. "
-            "Download from Google Cloud Console and place at the configured path, "
-            "or set GOOGLE_SERVICE_ACCOUNT_KEY env var."
+            "OAuth token file not found. "
+            "Place your token.pickle in credentials/ or set GOOGLE_TOKEN_FILE env var."
         )
-    return service_account.Credentials.from_service_account_file(
-        str(key_path), scopes=SCOPES
-    )
+
+    with open(token_path, "rb") as f:
+        creds = pickle.load(f)
+
+    if creds.expired and creds.refresh_token:
+        creds.refresh(Request())
+        with open(token_path, "wb") as f:
+            pickle.dump(creds, f)
+        logger.info("Access token refreshed and saved.")
+
+    return creds
 
 
 def get_admob_service():

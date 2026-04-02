@@ -23,8 +23,8 @@
 
     <key>EnvironmentVariables</key>
     <dict>
-        <key>GOOGLE_SERVICE_ACCOUNT_KEY</key>
-        <string>credentials/service_account.json</string>
+        <key>GOOGLE_TOKEN_FILE</key>
+        <string>credentials/token.pickle</string>
         <key>ADMOB_ACCOUNT_ID</key>
         <string>pub-XXXXXXXXXXXXXXXX</string>
         <key>MCP_HOST</key>
