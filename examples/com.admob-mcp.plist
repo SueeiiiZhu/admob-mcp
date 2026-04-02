@@ -1,0 +1,48 @@
+<!-- launchd 配置示例（macOS）-->
+<!-- 安装：cp com.admob-mcp.plist ~/Library/LaunchAgents/ -->
+<!-- 启用：launchctl load ~/Library/LaunchAgents/com.admob-mcp.plist -->
+<!-- 停止：launchctl unload ~/Library/LaunchAgents/com.admob-mcp.plist -->
+
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.admob-mcp</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/xi/workspace/admob-mcp/.venv/bin/python</string>
+        <string>server.py</string>
+        <string>--transport</string>
+        <string>streamable-http</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/xi/workspace/admob-mcp</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>GOOGLE_SERVICE_ACCOUNT_KEY</key>
+        <string>credentials/service_account.json</string>
+        <key>ADMOB_ACCOUNT_ID</key>
+        <string>pub-XXXXXXXXXXXXXXXX</string>
+        <key>MCP_HOST</key>
+        <string>127.0.0.1</string>
+        <key>MCP_PORT</key>
+        <string>8000</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/admob-mcp.stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/admob-mcp.stderr.log</string>
+</dict>
+</plist>

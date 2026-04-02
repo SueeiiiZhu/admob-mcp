@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "admob-stdio": {
+      "command": "/Users/xi/workspace/admob-mcp/.venv/bin/python",
+      "args": ["/Users/xi/workspace/admob-mcp/server.py"],
+      "env": {
+        "GOOGLE_SERVICE_ACCOUNT_KEY": "/Users/xi/workspace/admob-mcp/credentials/service_account.json",
+        "ADMOB_ACCOUNT_ID": "pub-XXXXXXXXXXXXXXXX"
+      }
+    },
+    "admob-http": {
+      "url": "http://127.0.0.1:8000/mcp"
+    }
+  }
+}

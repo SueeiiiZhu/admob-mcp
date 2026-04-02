@@ -1,0 +1,16 @@
+# Credentials & secrets — match anywhere in repo
+**/service_account.json
+**/client_secret.json
+**/token.json
+credentials/*.json
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+dist/
+build/

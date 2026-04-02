@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:developers.google.com)",
+      "WebFetch(domain:gofastmcp.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:googleapis.github.io)",
+      "WebFetch(domain:pypi.org)"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "codex-micro",
+    "codex-build",
+    "codex-deep",
+    "codex-ultra",
+    "codex-fallback"
+  ]
+}

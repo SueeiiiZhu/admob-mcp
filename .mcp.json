@@ -1,0 +1,47 @@
+{
+  "mcpServers": {
+    "codex-micro": {
+      "type": "stdio",
+      "command": "codex",
+      "args": ["--profile", "micro", "mcp-server"],
+      "env": {}
+    },
+    "codex-build": {
+      "type": "stdio",
+      "command": "codex",
+      "args": ["--profile", "build", "mcp-server"],
+      "env": {}
+    },
+    "codex-deep": {
+      "type": "stdio",
+      "command": "codex",
+      "args": ["--profile", "deep", "mcp-server"],
+      "env": {}
+    },
+    "codex-ultra": {
+      "type": "stdio",
+      "command": "codex",
+      "args": ["--profile", "ultra", "mcp-server"],
+      "env": {}
+    },
+    "codex-fallback": {
+      "type": "stdio",
+      "command": "codex",
+      "args": ["--profile", "fallback", "mcp-server"],
+      "env": {}
+    },
+    "admob-stdio": {
+      "type": "stdio",
+      "command": ".venv/bin/python",
+      "args": ["server.py"],
+      "env": {
+        "GOOGLE_SERVICE_ACCOUNT_KEY": "credentials/service_account.json",
+        "ADMOB_ACCOUNT_ID": "pub-XXXXXXXXXXXXXXXX"
+      }
+    },
+    "admob-http": {
+      "type": "http",
+      "url": "http://127.0.0.1:8000/mcp"
+    }
+  }
+}

@@ -1,0 +1,29 @@
+# systemd service 配置示例（Linux）
+# 安装：cp admob-mcp.service /etc/systemd/system/
+# 启用：systemctl enable --now admob-mcp
+
+[Unit]
+Description=AdMob MCP Server (HTTP)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/admob-mcp
+ExecStart=/opt/admob-mcp/.venv/bin/python server.py --transport streamable-http
+Restart=on-failure
+RestartSec=5
+
+# 环境变量
+EnvironmentFile=/opt/admob-mcp/.env
+
+# 安全加固
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/admob-mcp/credentials
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
