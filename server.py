@@ -8,6 +8,7 @@ from decimal import Decimal
 
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 load_dotenv()
 
@@ -23,6 +24,15 @@ mcp = FastMCP(
     "AdMob-Analyst",
     host=os.getenv("MCP_HOST", "127.0.0.1"),
     port=int(os.getenv("MCP_PORT", "8000")),
+    transport_security=TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=[
+            "localhost:*",
+            "127.0.0.1:*",
+            "admob-mcp.boostvision.net",
+            "admob-mcp.boostvision.net:*",
+        ],
+    ),
 )
 
 
