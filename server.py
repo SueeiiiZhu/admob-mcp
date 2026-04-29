@@ -314,6 +314,7 @@ def list_mediation_groups(
     platform: str = "",
     ad_format: str = "",
     filter_expr: str = "",
+    display_name_contains: str = "",
     page_size: int = 50,
     max_items: int = 100,
     fields: str = "",
@@ -330,6 +331,9 @@ def list_mediation_groups(
       - filter_expr: 原始 AdMob 过滤表达式，会与上面便捷条件 AND 拼接。注意 AdMob v1beta
         实测仅支持 STATE / PLATFORM / FORMAT 字段，AD_UNIT_ID / MEDIATION_GROUP_ID 等
         会被拒绝为 "Invalid field name"。
+      - display_name_contains: 客户端 displayName 子串过滤（大小写不敏感）。AdMob
+        服务端过滤不支持 displayName，因此该过滤在分页时逐页应用，max_items 计的是
+        过滤后的命中条数。
       - page_size: 单次 RPC 页大小，默认 50
       - max_items: 跨页总条数上限，默认 100；返回结果含 truncated 与 nextPageToken；
         大账户（>500 groups）配合 full_response=True 一次取回会超过工具结果上限，请保持
@@ -356,6 +360,7 @@ def list_mediation_groups(
             page_size=page_size or None,
             max_items=max_items or None,
             fields=fields_arg,
+            display_name_contains=display_name_contains.strip() or None,
         )
         return json.dumps(result, ensure_ascii=False, indent=2)
     except Exception as e:

@@ -182,6 +182,7 @@ def list_mediation_groups(
     page_size: Optional[int] = None,
     max_items: Optional[int] = None,
     fields: Optional[str] = None,
+    display_name_contains: Optional[str] = None,
 ) -> dict:
     """List mediation groups with pagination control. Requires admob.readonly scope.
 
@@ -190,8 +191,12 @@ def list_mediation_groups(
             Supported fields: AD_UNIT_ID, STATE, FORMAT, PLATFORM. Function: IS_ANY_OF.
         page_size: Server-side page size (caps per-RPC payload).
         max_items: Total items cap across all pages; stops paging once reached.
+            When display_name_contains is set, max_items counts post-filter matches.
         fields: Partial-response FieldMask, e.g.
             "mediationGroups(name,displayName,state,targeting),nextPageToken".
+        display_name_contains: Client-side substring filter (case-insensitive) on
+            displayName. AdMob server-side filter does not support displayName,
+            so this is applied per-page during pagination.
 
     Returns dict with keys: mediationGroups, count, truncated, nextPageToken.
     `truncated` is True when more results exist beyond what was returned.
@@ -206,12 +211,19 @@ def list_mediation_groups(
     if fields:
         kwargs["fields"] = fields
 
+    needle = (display_name_contains or "").strip().lower() or None
+
     next_token: Optional[str] = None
     truncated = False
     request = service.accounts().mediationGroups().list(**kwargs)
     while request is not None:
         resp = request.execute()
         page_items = resp.get("mediationGroups", [])
+        if needle is not None:
+            page_items = [
+                g for g in page_items
+                if needle in (g.get("displayName") or "").lower()
+            ]
         if max_items is not None and len(groups) + len(page_items) >= max_items:
             remaining = max_items - len(groups)
             groups.extend(page_items[:remaining])
