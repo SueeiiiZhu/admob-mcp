@@ -12,6 +12,9 @@ BASE_DIR = Path(__file__).resolve().parent
 
 SCOPES = [
     "https://www.googleapis.com/auth/admob.readonly",
+    # 写入 Mediation Group / A/B 实验 / Ad Unit Mapping 需要 monetization scope。
+    # 已有 token 仅用读权限时可继续使用，调用写接口前请重跑 auth_flow.py 重新授权。
+    "https://www.googleapis.com/auth/admob.monetization",
 ]
 
 
@@ -45,3 +48,12 @@ def _get_credentials():
 def get_admob_service():
     """Build and return AdMob API v1 service."""
     return build("admob", "v1", credentials=_get_credentials())
+
+
+def get_admob_service_v1beta():
+    """Build and return AdMob API v1beta service.
+
+    v1beta 暴露 Mediation Group、Mediation A/B 实验、Ad Unit Mapping、AdSource 等
+    需要白名单的接口。读取使用 admob.readonly scope，写入需要 admob.monetization scope。
+    """
+    return build("admob", "v1beta", credentials=_get_credentials())

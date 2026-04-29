@@ -259,6 +259,256 @@ def fetch_revenue(days: int = 7, account_id: str = "", currency: str = "USD") ->
         return _tool_error(e)
 
 
+# ── v1beta Mediation 管理工具（白名单接口）──
+
+
+def _parse_json_arg(name: str, raw: str) -> dict:
+    """Parse a JSON object string argument; raise ValueError with a helpful message."""
+    raw = (raw or "").strip()
+    if not raw:
+        raise ValueError(f"{name} must be a non-empty JSON object string")
+    try:
+        obj = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"{name} is not valid JSON: {e}") from e
+    if not isinstance(obj, dict):
+        raise ValueError(f"{name} must be a JSON object")
+    return obj
+
+
+@mcp.tool()
+def list_mediation_groups(
+    account_id: str = "",
+    filter_expr: str = "",
+    page_size: int = 0,
+) -> str:
+    """列出账户下所有 Mediation Groups（中介组）。需要白名单权限。
+    filter_expr 例: 'AD_UNIT_ID = "ca-app-pub-XXX/123"' 或 'STATE = "ENABLED"'。"""
+    try:
+        from auth import get_admob_service_v1beta
+        from admob_api import list_mediation_groups as _list
+
+        service = get_admob_service_v1beta()
+        aid = _get_account_id(account_id)
+        result = _list(
+            service, aid,
+            filter_expr=filter_expr or None,
+            page_size=page_size or None,
+        )
+        return json.dumps(result, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error("list_mediation_groups failed")
+        return _tool_error(e)
+
+
+@mcp.tool()
+def create_mediation_group(body_json: str, account_id: str = "") -> str:
+    """创建 Mediation Group。需要 admob.monetization scope（写权限）。
+    body_json 为 MediationGroup 的 JSON：必含 displayName、targeting、mediationGroupLines；
+    可选 state（"ENABLED"/"DISABLED"）等。
+    示例 targeting: {"platform":"ANDROID","format":"BANNER","adUnitIds":["accounts/pub-XXX/adUnits/123"]}。"""
+    try:
+        from auth import get_admob_service_v1beta
+        from admob_api import create_mediation_group as _create
+
+        service = get_admob_service_v1beta()
+        aid = _get_account_id(account_id)
+        body = _parse_json_arg("body_json", body_json)
+        result = _create(service, aid, body)
+        return json.dumps(result, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error("create_mediation_group failed")
+        return _tool_error(e)
+
+
+@mcp.tool()
+def update_mediation_group(
+    mediation_group_id: str,
+    body_json: str,
+    update_mask: str = "",
+    account_id: str = "",
+) -> str:
+    """更新 Mediation Group（PATCH）。需要 admob.monetization scope。
+    mediation_group_id 为组 ID（不含 accounts/.../mediationGroups/ 前缀）。
+    update_mask 为逗号分隔的字段路径，如 'displayName,state,mediationGroupLines'。"""
+    try:
+        from auth import get_admob_service_v1beta
+        from admob_api import update_mediation_group as _update
+
+        service = get_admob_service_v1beta()
+        aid = _get_account_id(account_id)
+        body = _parse_json_arg("body_json", body_json)
+        result = _update(
+            service, aid, mediation_group_id, body,
+            update_mask=update_mask or None,
+        )
+        return json.dumps(result, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error("update_mediation_group failed")
+        return _tool_error(e)
+
+
+@mcp.tool()
+def create_mediation_ab_experiment(
+    mediation_group_id: str,
+    body_json: str,
+    account_id: str = "",
+) -> str:
+    """在指定 Mediation Group 下创建 A/B 实验。需要 admob.monetization scope。
+    body_json 为 MediationAbExperiment 的 JSON：含 displayName、controlMediationLines、
+    treatmentMediationLines、treatmentTrafficPercentage（"0"-"100" 字符串）、
+    variantLeader（"VARIANT_LEADER_UNSPECIFIED"/"CONTROL"/"TREATMENT"）等。"""
+    try:
+        from auth import get_admob_service_v1beta
+        from admob_api import create_mediation_ab_experiment as _create
+
+        service = get_admob_service_v1beta()
+        aid = _get_account_id(account_id)
+        body = _parse_json_arg("body_json", body_json)
+        result = _create(service, aid, mediation_group_id, body)
+        return json.dumps(result, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error("create_mediation_ab_experiment failed")
+        return _tool_error(e)
+
+
+@mcp.tool()
+def stop_mediation_ab_experiment(
+    mediation_group_id: str,
+    experiment_id: str,
+    variant_choice: str = "",
+    account_id: str = "",
+) -> str:
+    """停止 A/B 实验。需要 admob.monetization scope。
+    variant_choice 可选: 'CHOOSE_CONTROL' | 'CHOOSE_TREATMENT' | 'CHOOSE_POLL_ENDED_VARIANT'，
+    留空则不指定。"""
+    try:
+        from auth import get_admob_service_v1beta
+        from admob_api import stop_mediation_ab_experiment as _stop
+
+        service = get_admob_service_v1beta()
+        aid = _get_account_id(account_id)
+        result = _stop(
+            service, aid, mediation_group_id, experiment_id,
+            variant_choice=variant_choice or None,
+        )
+        return json.dumps(result, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error("stop_mediation_ab_experiment failed")
+        return _tool_error(e)
+
+
+@mcp.tool()
+def list_ad_unit_mappings(
+    ad_unit_id: str,
+    filter_expr: str = "",
+    page_size: int = 0,
+    account_id: str = "",
+) -> str:
+    """列出指定 Ad Unit 下所有 Ad Unit Mappings（第三方广告源映射）。
+    ad_unit_id 为广告单元 ID（不含 accounts/.../adUnits/ 前缀）。
+    filter_expr 例: 'STATE = "ENABLED"' 或 'ADAPTER_ID = "...". """
+    try:
+        from auth import get_admob_service_v1beta
+        from admob_api import list_ad_unit_mappings as _list
+
+        service = get_admob_service_v1beta()
+        aid = _get_account_id(account_id)
+        result = _list(
+            service, aid, ad_unit_id,
+            filter_expr=filter_expr or None,
+            page_size=page_size or None,
+        )
+        return json.dumps(result, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error("list_ad_unit_mappings failed")
+        return _tool_error(e)
+
+
+@mcp.tool()
+def create_ad_unit_mapping(
+    ad_unit_id: str,
+    body_json: str,
+    account_id: str = "",
+) -> str:
+    """创建单个 Ad Unit Mapping。需要 admob.monetization scope。
+    body_json 为 AdUnitMapping 的 JSON：含 displayName、adapterId、
+    adUnitConfigurations（map<string,string>，由 adapter 元数据决定 key）、state。"""
+    try:
+        from auth import get_admob_service_v1beta
+        from admob_api import create_ad_unit_mapping as _create
+
+        service = get_admob_service_v1beta()
+        aid = _get_account_id(account_id)
+        body = _parse_json_arg("body_json", body_json)
+        result = _create(service, aid, ad_unit_id, body)
+        return json.dumps(result, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error("create_ad_unit_mapping failed")
+        return _tool_error(e)
+
+
+@mcp.tool()
+def batch_create_ad_unit_mappings(
+    requests_json: str,
+    account_id: str = "",
+) -> str:
+    """批量创建 Ad Unit Mappings。需要 admob.monetization scope。
+    requests_json 为 JSON 数组，每项形如:
+      {"parent":"accounts/pub-XXX/adUnits/123","adUnitMapping":{...}}。"""
+    try:
+        from auth import get_admob_service_v1beta
+        from admob_api import batch_create_ad_unit_mappings as _batch
+
+        service = get_admob_service_v1beta()
+        aid = _get_account_id(account_id)
+        raw = (requests_json or "").strip()
+        if not raw:
+            raise ValueError("requests_json must be a non-empty JSON array")
+        items = json.loads(raw)
+        if not isinstance(items, list):
+            raise ValueError("requests_json must be a JSON array")
+        result = _batch(service, aid, items)
+        return json.dumps(result, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error("batch_create_ad_unit_mappings failed")
+        return _tool_error(e)
+
+
+@mcp.tool()
+def list_ad_sources(account_id: str = "") -> str:
+    """列出账户可用的 Ad Sources（如 AdMob Network、Meta、AppLovin 等），
+    返回的 adSourceId 用于查询 adapters 和构造 mediation lines。"""
+    try:
+        from auth import get_admob_service_v1beta
+        from admob_api import list_ad_sources as _list
+
+        service = get_admob_service_v1beta()
+        aid = _get_account_id(account_id)
+        result = _list(service, aid)
+        return json.dumps(result, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error("list_ad_sources failed")
+        return _tool_error(e)
+
+
+@mcp.tool()
+def list_adapters(ad_source_id: str, account_id: str = "") -> str:
+    """列出指定 Ad Source 下的 Adapters（按平台/广告格式划分）。
+    返回 adapterId 与 adapterConfigMetadata（构造 AdUnitMapping.adUnitConfigurations 时需要的 key）。"""
+    try:
+        from auth import get_admob_service_v1beta
+        from admob_api import list_adapters as _list
+
+        service = get_admob_service_v1beta()
+        aid = _get_account_id(account_id)
+        result = _list(service, aid, ad_source_id)
+        return json.dumps(result, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error("list_adapters failed")
+        return _tool_error(e)
+
+
 def _build_streamable_http_app(mcp_path: str = "/mcp"):
     """Build a raw ASGI app with Streamable HTTP transport.
 

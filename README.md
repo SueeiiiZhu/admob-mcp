@@ -4,7 +4,9 @@
 
 ## 功能
 
-提供 7 个 MCP Tools：
+提供以下 MCP Tools：
+
+### 报告与基础查询
 
 | Tool | 说明 |
 |------|------|
@@ -15,6 +17,24 @@
 | `fetch_network_report` | 生成网络报告（收入、展示、点击等，支持自定义维度和指标） |
 | `fetch_mediation_report` | 生成中介报告（按广告源查看表现） |
 | `fetch_revenue` | 快捷查询：按日汇总广告收入 |
+
+### Mediation 管理（v1beta，需账户白名单）
+
+| Tool | 说明 |
+|------|------|
+| `list_mediation_groups` | 列出账户下所有 Mediation Group |
+| `create_mediation_group` | 创建 Mediation Group（写）|
+| `update_mediation_group` | 更新 Mediation Group（PATCH，写）|
+| `create_mediation_ab_experiment` | 在指定 Group 下创建 A/B 实验（写）|
+| `stop_mediation_ab_experiment` | 停止 A/B 实验并选择要保留的变体（写）|
+| `list_ad_unit_mappings` | 列出某 Ad Unit 下的第三方广告源映射 |
+| `create_ad_unit_mapping` | 创建单个 Ad Unit Mapping（写）|
+| `batch_create_ad_unit_mappings` | 批量创建 Ad Unit Mappings（写）|
+| `list_ad_sources` | 列出账户可用的 Ad Source（含 adSourceId）|
+| `list_adapters` | 列出指定 Ad Source 下的 Adapter 元数据 |
+
+> 上述接口需要 AdMob 团队为账户开通白名单。读取使用 `admob.readonly`，写入需要
+> `admob.monetization` scope，旧 token 仅含读权限的请重新运行 `python auth_flow.py` 重新授权。
 
 ## 前置条件
 

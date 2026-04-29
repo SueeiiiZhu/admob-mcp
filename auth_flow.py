@@ -14,7 +14,11 @@ from pathlib import Path
 from google_auth_oauthlib.flow import InstalledAppFlow
 
 BASE_DIR = Path(__file__).resolve().parent
-SCOPES = ["https://www.googleapis.com/auth/admob.readonly"]
+SCOPES = [
+    "https://www.googleapis.com/auth/admob.readonly",
+    # 写入 Mediation Group / A/B 实验 / Ad Unit Mapping 等接口需要此 scope。
+    "https://www.googleapis.com/auth/admob.monetization",
+]
 
 
 def main():
