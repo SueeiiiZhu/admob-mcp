@@ -288,10 +288,13 @@ def _compose_mg_filter(
     state: str,
     platform: str,
     ad_format: str,
-    ad_unit_id: str,
     extra: str,
 ) -> Optional[str]:
-    """Compose AdMob mediationGroups list filter from convenience args + raw expr."""
+    """Compose AdMob mediationGroups list filter from convenience args + raw expr.
+
+    AdMob v1beta only supports STATE / PLATFORM / FORMAT as filter fields; any
+    other field (e.g. AD_UNIT_ID, MEDIATION_GROUP_ID) is rejected with HTTP 400.
+    """
     parts: list[str] = []
     if state:
         parts.append(f'STATE = "{state.strip().upper()}"')
@@ -299,8 +302,6 @@ def _compose_mg_filter(
         parts.append(f'PLATFORM = "{platform.strip().upper()}"')
     if ad_format:
         parts.append(f'FORMAT = "{ad_format.strip().upper()}"')
-    if ad_unit_id:
-        parts.append(f'AD_UNIT_ID = "{ad_unit_id.strip()}"')
     if extra:
         parts.append(f"({extra.strip()})")
     return " AND ".join(parts) if parts else None
@@ -312,7 +313,6 @@ def list_mediation_groups(
     state: str = "",
     platform: str = "",
     ad_format: str = "",
-    ad_unit_id: str = "",
     filter_expr: str = "",
     page_size: int = 50,
     max_items: int = 100,
@@ -321,17 +321,19 @@ def list_mediation_groups(
 ) -> str:
     """列出 Mediation Groups（中介组），含分页/过滤/字段裁剪。需要白名单权限。
 
-    便捷过滤（会自动 AND 拼接到 filter）：
+    便捷过滤（会自动 AND 拼接到 filter，AdMob 仅支持以下字段）：
       - state: ENABLED | DISABLED
       - platform: ANDROID | IOS
       - ad_format: BANNER | INTERSTITIAL | REWARDED | REWARDED_INTERSTITIAL | NATIVE | APP_OPEN
-      - ad_unit_id: 单个广告单元 ID（含 ca-app-pub-... 前缀）
 
     其他参数：
-      - filter_expr: 原始 AdMob 过滤表达式，会与上面便捷条件 AND 拼接，
-        例如 'AD_UNIT_ID = IS_ANY_OF("...", "...")'
+      - filter_expr: 原始 AdMob 过滤表达式，会与上面便捷条件 AND 拼接。注意 AdMob v1beta
+        实测仅支持 STATE / PLATFORM / FORMAT 字段，AD_UNIT_ID / MEDIATION_GROUP_ID 等
+        会被拒绝为 "Invalid field name"。
       - page_size: 单次 RPC 页大小，默认 50
-      - max_items: 跨页总条数上限，默认 100；返回结果含 truncated 与 nextPageToken
+      - max_items: 跨页总条数上限，默认 100；返回结果含 truncated 与 nextPageToken；
+        大账户（>500 groups）配合 full_response=True 一次取回会超过工具结果上限，请保持
+        默认 max_items 或自行翻页
       - fields: 自定义 FieldMask；留空则使用默认裁剪（去掉沉重的 mediationGroupLines）
       - full_response: True 时返回完整字段（忽略 fields 参数）"""
     try:
@@ -341,7 +343,7 @@ def list_mediation_groups(
         service = get_admob_service_v1beta()
         aid = _get_account_id(account_id)
         composed_filter = _compose_mg_filter(
-            state, platform, ad_format, ad_unit_id, filter_expr,
+            state, platform, ad_format, filter_expr,
         )
         if full_response:
             fields_arg: Optional[str] = None
@@ -364,9 +366,20 @@ def list_mediation_groups(
 @mcp.tool()
 def create_mediation_group(body_json: str, account_id: str = "") -> str:
     """创建 Mediation Group。需要 admob.monetization scope（写权限）。
-    body_json 为 MediationGroup 的 JSON：必含 displayName、targeting、mediationGroupLines；
-    可选 state（"ENABLED"/"DISABLED"）等。
-    示例 targeting: {"platform":"ANDROID","format":"BANNER","adUnitIds":["accounts/pub-XXX/adUnits/123"]}。"""
+
+    body_json 关键字段（MediationGroup）：
+      - displayName (str)
+      - state ("ENABLED" | "DISABLED")
+      - targeting:
+          {"platform":"ANDROID|IOS",
+           "format":"BANNER|INTERSTITIAL|REWARDED|REWARDED_INTERSTITIAL|NATIVE|APP_OPEN",
+           "adUnitIds":["ca-app-pub-XXX/123", ...]}        # ⚠ 短字符串，非 resource name
+      - mediationGroupLines: **map<string, MediationGroupLine>**（不是数组），
+        创建时 key 可任写一个标签，AdMob 返回时会替换为自动生成的 line id。
+        每条 MediationGroupLine 的 adUnitMappings 也是 map<string, string>，
+        **key = 完整 ca-app-pub-XXX/123，value = 对应 mapping 的 resource name**。
+        targeted ad unit 的格式必须与 targeting.format 一致，否则 400。
+        允许传空 map `{}`，AdMob 会自动加一条默认 AdMob Network line。"""
     try:
         from auth import get_admob_service_v1beta
         from admob_api import create_mediation_group as _create
@@ -389,8 +402,19 @@ def update_mediation_group(
     account_id: str = "",
 ) -> str:
     """更新 Mediation Group（PATCH）。需要 admob.monetization scope。
+
     mediation_group_id 为组 ID（不含 accounts/.../mediationGroups/ 前缀）。
-    update_mask 为逗号分隔的字段路径，如 'displayName,state,mediationGroupLines'。"""
+    update_mask 为逗号分隔的字段路径（接受 camelCase 或 snake_case）。
+
+    ⚠ AdMob v1beta 实测**仅支持** patch 这些顶层字段：
+      - displayName / display_name
+      - state
+      - targeting
+
+    `mediationGroupLines` **不能** 通过 PATCH 修改（mask 里出现该字段会报
+    "Update mask contains fields that do not exist..."）。要改 lines，必须走
+    `create_mediation_ab_experiment` + `stop_mediation_ab_experiment(VARIANT_CHOICE_B)`
+    流程把新 lines 写回 group。"""
     try:
         from auth import get_admob_service_v1beta
         from admob_api import update_mediation_group as _update
@@ -415,9 +439,24 @@ def create_mediation_ab_experiment(
     account_id: str = "",
 ) -> str:
     """在指定 Mediation Group 下创建 A/B 实验。需要 admob.monetization scope。
-    body_json 为 MediationAbExperiment 的 JSON：含 displayName、controlMediationLines、
-    treatmentMediationLines、treatmentTrafficPercentage（"0"-"100" 字符串）、
-    variantLeader（"VARIANT_LEADER_UNSPECIFIED"/"CONTROL"/"TREATMENT"）等。"""
+
+    body_json 关键字段（MediationAbExperiment）：
+      - displayName (str)
+      - treatmentMediationLines: **list of {mediationGroupLine: MediationGroupLine}**
+        （注意每条 line 必须包一层 `mediationGroupLine`），且**不要**给 line 写 `id`，
+        AdMob 会自动分配；写了会报 "Treatment mediation lines shouldn't specify an Id"
+      - treatmentTrafficPercentage: 字符串 "1"–"99"
+      - variantLeader: "CONTROL" | "TREATMENT" | "VARIANT_LEADER_UNSPECIFIED"
+        （实验自然结束时默认胜出方）
+
+    ⚠ controlMediationLines 是 readOnly 字段，AdMob 会自动从 parent group 当前 lines
+    继承，**不要**在 body 里传，否则 schema 会报 unknown field。
+
+    最小 body 示例：
+      {"displayName":"exp1",
+       "treatmentMediationLines":[{"mediationGroupLine":{"displayName":"l","adSourceId":"...","cpmMode":"LIVE","state":"ENABLED"}}],
+       "treatmentTrafficPercentage":"1",
+       "variantLeader":"CONTROL"}"""
     try:
         from auth import get_admob_service_v1beta
         from admob_api import create_mediation_ab_experiment as _create
@@ -435,13 +474,18 @@ def create_mediation_ab_experiment(
 @mcp.tool()
 def stop_mediation_ab_experiment(
     mediation_group_id: str,
-    experiment_id: str,
     variant_choice: str = "",
     account_id: str = "",
 ) -> str:
-    """停止 A/B 实验。需要 admob.monetization scope。
-    variant_choice 可选: 'CHOOSE_CONTROL' | 'CHOOSE_TREATMENT' | 'CHOOSE_POLL_ENDED_VARIANT'，
-    留空则不指定。"""
+    """停止指定 Mediation Group 上正在运行的 A/B 实验。需要 admob.monetization scope。
+
+    AdMob v1beta 的 stop 端点路径只到 `mediationAbExperiments`，不带 experiment id
+    （每个 group 同一时刻仅允许 1 个实验在跑），因此无需也不能传 experiment_id。
+
+    variant_choice 可选枚举：
+      - 'VARIANT_CHOICE_A'：保留对照组（control，原 lines）
+      - 'VARIANT_CHOICE_B'：采用实验组（treatment lines）写回 group
+      - 留空：不指定（仅在实验已自然结束时合法）"""
     try:
         from auth import get_admob_service_v1beta
         from admob_api import stop_mediation_ab_experiment as _stop
@@ -449,7 +493,7 @@ def stop_mediation_ab_experiment(
         service = get_admob_service_v1beta()
         aid = _get_account_id(account_id)
         result = _stop(
-            service, aid, mediation_group_id, experiment_id,
+            service, aid, mediation_group_id,
             variant_choice=variant_choice or None,
         )
         return json.dumps(result, ensure_ascii=False, indent=2)
@@ -492,8 +536,16 @@ def create_ad_unit_mapping(
     account_id: str = "",
 ) -> str:
     """创建单个 Ad Unit Mapping。需要 admob.monetization scope。
-    body_json 为 AdUnitMapping 的 JSON：含 displayName、adapterId、
-    adUnitConfigurations（map<string,string>，由 adapter 元数据决定 key）、state。"""
+
+    body_json 关键字段（AdUnitMapping）：
+      - displayName (str)
+      - adapterId (str)
+      - adUnitConfigurations: map<string,string>，key 是 adapter 元数据里的
+        adapterConfigMetadataId（如 AdMob Network Android 是 "118"），不是 label 名
+      - state: 仅支持 "ENABLED"，AdMob v1beta 没有 "DISABLED" 枚举
+
+    ⚠ AdMob 会按 (adapterId + adUnitConfigurations) 做去重——配置完全相同时二次创建
+    会复用旧 mapping 的 id 并仅更新 displayName，不会创建新行。"""
     try:
         from auth import get_admob_service_v1beta
         from admob_api import create_ad_unit_mapping as _create
@@ -514,8 +566,13 @@ def batch_create_ad_unit_mappings(
     account_id: str = "",
 ) -> str:
     """批量创建 Ad Unit Mappings。需要 admob.monetization scope。
-    requests_json 为 JSON 数组，每项形如:
-      {"parent":"accounts/pub-XXX/adUnits/123","adUnitMapping":{...}}。"""
+
+    requests_json 为 JSON 数组，每项必须形如：
+      {"parent":"accounts/pub-XXX/adUnits/123","adUnitMapping":{...}}
+
+    ⚠ 字段名是 `parent`（**不是** `adUnitId`）。`adUnitMapping.state` 只接受
+    "ENABLED"，传 "DISABLED" 会被拒绝为 invalid enum。同 create_ad_unit_mapping，
+    AdMob 按 (adapterId + adUnitConfigurations) 去重，相同配置会复用旧 id。"""
     try:
         from auth import get_admob_service_v1beta
         from admob_api import batch_create_ad_unit_mappings as _batch

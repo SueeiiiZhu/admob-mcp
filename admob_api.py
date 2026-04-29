@@ -288,19 +288,25 @@ def stop_mediation_ab_experiment(
     service,
     account_id: str,
     mediation_group_id: str,
-    experiment_id: str,
     variant_choice: Optional[str] = None,
 ) -> dict:
-    """Stop a running A/B experiment. Requires admob.monetization scope.
+    """Stop the running A/B experiment under a mediation group.
 
-    `variant_choice` is the StopMediationAbExperimentRequest.variantChoice enum, e.g.
-    "CHOOSE_CONTROL", "CHOOSE_TREATMENT", "CHOOSE_POLL_ENDED_VARIANT", or None.
+    AdMob v1beta exposes stop at the collection level
+    `accounts/{aid}/mediationGroups/{gid}/mediationAbExperiments` (no experiment id
+    in the path) — only one experiment can run per group at a time, so the API
+    operates on whatever is currently RUNNING.
+
+    `variant_choice` is the StopMediationAbExperimentRequest.variantChoice enum:
+    "VARIANT_CHOICE_A" (keep original/control lines),
+    "VARIANT_CHOICE_B" (promote treatment lines), or None.
+
+    Requires admob.monetization scope.
     """
-    name = _ensure_nested_name(
-        account_id,
-        "mediationGroups", mediation_group_id,
-        "mediationAbExperiments", experiment_id,
+    group = _ensure_nested_name(
+        account_id, "mediationGroups", mediation_group_id,
     )
+    name = f"{group}/mediationAbExperiments"
     body = {"variantChoice": variant_choice} if variant_choice else {}
     return (
         service.accounts()
