@@ -35,6 +35,10 @@
 
 > 上述接口需要 AdMob 团队为账户开通白名单。读取使用 `admob.readonly`，写入需要
 > `admob.monetization` scope，旧 token 仅含读权限的请重新运行 `python auth_flow.py` 重新授权。
+>
+> ⚠ AdMob v1beta 有不少官方文档没明说的接口缺口与字段限制（如 `mediationAbExperiments`
+> 没有 list/get、`adUnitMappings` 没有 update/delete、`update_mediation_group` 不能 patch
+> `mediationGroupLines` 等）。做需求评估前请查 [docs/admob-api-gaps.md](docs/admob-api-gaps.md)。
 
 ## 前置条件
 
