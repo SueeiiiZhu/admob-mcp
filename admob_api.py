@@ -180,8 +180,22 @@ def list_mediation_groups(
     account_id: str,
     filter_expr: Optional[str] = None,
     page_size: Optional[int] = None,
-) -> list[dict]:
-    """List mediation groups (handles pagination). Requires admob.readonly scope."""
+    max_items: Optional[int] = None,
+    fields: Optional[str] = None,
+) -> dict:
+    """List mediation groups with pagination control. Requires admob.readonly scope.
+
+    Args:
+        filter_expr: AdMob list filter, e.g. 'STATE = "ENABLED" AND PLATFORM = "ANDROID"'.
+            Supported fields: AD_UNIT_ID, STATE, FORMAT, PLATFORM. Function: IS_ANY_OF.
+        page_size: Server-side page size (caps per-RPC payload).
+        max_items: Total items cap across all pages; stops paging once reached.
+        fields: Partial-response FieldMask, e.g.
+            "mediationGroups(name,displayName,state,targeting),nextPageToken".
+
+    Returns dict with keys: mediationGroups, count, truncated, nextPageToken.
+    `truncated` is True when more results exist beyond what was returned.
+    """
     parent = _ensure_resource_name(account_id, "accounts")
     groups: list[dict] = []
     kwargs = {"parent": parent}
@@ -189,12 +203,30 @@ def list_mediation_groups(
         kwargs["filter"] = filter_expr
     if page_size:
         kwargs["pageSize"] = page_size
+    if fields:
+        kwargs["fields"] = fields
+
+    next_token: Optional[str] = None
+    truncated = False
     request = service.accounts().mediationGroups().list(**kwargs)
     while request is not None:
         resp = request.execute()
-        groups.extend(resp.get("mediationGroups", []))
+        page_items = resp.get("mediationGroups", [])
+        if max_items is not None and len(groups) + len(page_items) >= max_items:
+            remaining = max_items - len(groups)
+            groups.extend(page_items[:remaining])
+            next_token = resp.get("nextPageToken")
+            truncated = bool(next_token) or len(page_items) > remaining
+            break
+        groups.extend(page_items)
         request = service.accounts().mediationGroups().list_next(request, resp)
-    return groups
+
+    return {
+        "mediationGroups": groups,
+        "count": len(groups),
+        "truncated": truncated,
+        "nextPageToken": next_token,
+    }
 
 
 def create_mediation_group(service, account_id: str, body: dict) -> dict:

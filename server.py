@@ -5,6 +5,7 @@ import sys
 import json
 import logging
 from decimal import Decimal
+from typing import Optional
 
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
@@ -276,24 +277,83 @@ def _parse_json_arg(name: str, raw: str) -> dict:
     return obj
 
 
+_MG_DEFAULT_FIELDS = (
+    "mediationGroups("
+    "name,mediationGroupId,displayName,state,mediationAbExperimentState,targeting"
+    "),nextPageToken"
+)
+
+
+def _compose_mg_filter(
+    state: str,
+    platform: str,
+    ad_format: str,
+    ad_unit_id: str,
+    extra: str,
+) -> Optional[str]:
+    """Compose AdMob mediationGroups list filter from convenience args + raw expr."""
+    parts: list[str] = []
+    if state:
+        parts.append(f'STATE = "{state.strip().upper()}"')
+    if platform:
+        parts.append(f'PLATFORM = "{platform.strip().upper()}"')
+    if ad_format:
+        parts.append(f'FORMAT = "{ad_format.strip().upper()}"')
+    if ad_unit_id:
+        parts.append(f'AD_UNIT_ID = "{ad_unit_id.strip()}"')
+    if extra:
+        parts.append(f"({extra.strip()})")
+    return " AND ".join(parts) if parts else None
+
+
 @mcp.tool()
 def list_mediation_groups(
     account_id: str = "",
+    state: str = "",
+    platform: str = "",
+    ad_format: str = "",
+    ad_unit_id: str = "",
     filter_expr: str = "",
-    page_size: int = 0,
+    page_size: int = 50,
+    max_items: int = 100,
+    fields: str = "",
+    full_response: bool = False,
 ) -> str:
-    """列出账户下所有 Mediation Groups（中介组）。需要白名单权限。
-    filter_expr 例: 'AD_UNIT_ID = "ca-app-pub-XXX/123"' 或 'STATE = "ENABLED"'。"""
+    """列出 Mediation Groups（中介组），含分页/过滤/字段裁剪。需要白名单权限。
+
+    便捷过滤（会自动 AND 拼接到 filter）：
+      - state: ENABLED | DISABLED
+      - platform: ANDROID | IOS
+      - ad_format: BANNER | INTERSTITIAL | REWARDED | REWARDED_INTERSTITIAL | NATIVE | APP_OPEN
+      - ad_unit_id: 单个广告单元 ID（含 ca-app-pub-... 前缀）
+
+    其他参数：
+      - filter_expr: 原始 AdMob 过滤表达式，会与上面便捷条件 AND 拼接，
+        例如 'AD_UNIT_ID = IS_ANY_OF("...", "...")'
+      - page_size: 单次 RPC 页大小，默认 50
+      - max_items: 跨页总条数上限，默认 100；返回结果含 truncated 与 nextPageToken
+      - fields: 自定义 FieldMask；留空则使用默认裁剪（去掉沉重的 mediationGroupLines）
+      - full_response: True 时返回完整字段（忽略 fields 参数）"""
     try:
         from auth import get_admob_service_v1beta
         from admob_api import list_mediation_groups as _list
 
         service = get_admob_service_v1beta()
         aid = _get_account_id(account_id)
+        composed_filter = _compose_mg_filter(
+            state, platform, ad_format, ad_unit_id, filter_expr,
+        )
+        if full_response:
+            fields_arg: Optional[str] = None
+        else:
+            fields_arg = fields.strip() or _MG_DEFAULT_FIELDS
+
         result = _list(
             service, aid,
-            filter_expr=filter_expr or None,
+            filter_expr=composed_filter,
             page_size=page_size or None,
+            max_items=max_items or None,
+            fields=fields_arg,
         )
         return json.dumps(result, ensure_ascii=False, indent=2)
     except Exception as e:
