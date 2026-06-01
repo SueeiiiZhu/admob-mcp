@@ -76,7 +76,15 @@ python3 -c "import urllib.request, json; \
   - `VARIANT_CHOICE_B`：采用实验组写回 group
   - 文档里偶尔出现的 `CHOOSE_CONTROL` / `CHOOSE_TREATMENT` 是错的
 
-## 6. 写权限的 OAuth scope
+## 6. 报告接口的日期范围与单位坑
+
+`fetch_network_report` / `fetch_mediation_report` / `fetch_revenue` 共用 `_make_date_range`：
+
+- **默认排除当天**：AdMob 当天数据未结算（收入未定、曝光/请求有延迟），纳入后整体偏低。实测当天收入/曝光约为平日的 ~65%。本仓库默认 `endDate = 昨天`，`days` 从昨天往前算；要看今天的部分数据传 `include_today=True`。
+- **时区**：日期按**运行 MCP server 的本地时区**计算，而 AdMob 报表按**账户的报表时区**结算。跨日界时整个 dateRange 可能整体偏移一天。完整修复需读账户 `reportingTimeZone`，目前未做。
+- **比率指标是 0–1 小数**：`IMPRESSION_CTR` / `MATCH_RATE` / `SHOW_RATE` 走 `doubleValue`，返回 `0.045` 这类小数（=4.5%），不是百分比，需自行 ×100。货币类（`ESTIMATED_EARNINGS` / `IMPRESSION_RPM` / `OBSERVED_ECPM`）走 `microsValue`，已在解析时 /1e6 转成字符串小数。
+
+## 7. 写权限的 OAuth scope
 
 读接口够用 `admob.readonly` 就行；以下接口必须额外授权 `admob.monetization`：
 

@@ -159,10 +159,13 @@ def fetch_network_report(
     account_id: str = "",
     currency: str = "USD",
     max_rows: int = 100000,
+    include_today: bool = False,
 ) -> str:
     """生成 AdMob 网络报告。
     维度(dimensions): DATE, MONTH, WEEK, AD_UNIT, APP, AD_TYPE, COUNTRY, FORMAT, PLATFORM（逗号分隔）。
-    指标(metrics): ESTIMATED_EARNINGS, IMPRESSIONS, CLICKS, AD_REQUESTS, IMPRESSION_CTR, IMPRESSION_RPM, MATCHED_REQUESTS, MATCH_RATE, SHOW_RATE（逗号分隔，留空使用默认全部指标）。"""
+    指标(metrics): ESTIMATED_EARNINGS, IMPRESSIONS, CLICKS, AD_REQUESTS, IMPRESSION_CTR, IMPRESSION_RPM, MATCHED_REQUESTS, MATCH_RATE, SHOW_RATE（逗号分隔，留空使用默认全部指标）。
+    日期范围默认截止到昨天（AdMob 当天数据未结算、不完整）；include_today=True 才纳入今天的部分数据。
+    比率类指标（IMPRESSION_CTR / MATCH_RATE / SHOW_RATE）返回 0–1 的小数，需自行 ×100 换算成百分比。"""
     try:
         from auth import get_admob_service
         from admob_api import generate_network_report
@@ -180,6 +183,7 @@ def fetch_network_report(
             metrics=met_list,
             currency_code=currency,
             max_rows=max_rows,
+            include_today=include_today,
         )
         return json.dumps(result, ensure_ascii=False, indent=2)
     except Exception as e:
@@ -195,10 +199,12 @@ def fetch_mediation_report(
     account_id: str = "",
     currency: str = "USD",
     max_rows: int = 100000,
+    include_today: bool = False,
 ) -> str:
     """生成 AdMob 中介报告，按广告源查看表现。
     维度(dimensions): DATE, MONTH, WEEK, AD_SOURCE, AD_SOURCE_INSTANCE, AD_UNIT, APP, COUNTRY, FORMAT, PLATFORM（逗号分隔）。
-    指标(metrics): ESTIMATED_EARNINGS, IMPRESSIONS, CLICKS, MATCHED_REQUESTS, OBSERVED_ECPM（逗号分隔，留空使用默认指标）。"""
+    指标(metrics): ESTIMATED_EARNINGS, IMPRESSIONS, CLICKS, MATCHED_REQUESTS, OBSERVED_ECPM（逗号分隔，留空使用默认指标）。
+    日期范围默认截止到昨天（AdMob 当天数据未结算、不完整）；include_today=True 才纳入今天的部分数据。"""
     try:
         from auth import get_admob_service
         from admob_api import generate_mediation_report
@@ -216,6 +222,7 @@ def fetch_mediation_report(
             metrics=met_list,
             currency_code=currency,
             max_rows=max_rows,
+            include_today=include_today,
         )
         return json.dumps(result, ensure_ascii=False, indent=2)
     except Exception as e:
@@ -224,8 +231,14 @@ def fetch_mediation_report(
 
 
 @mcp.tool()
-def fetch_revenue(days: int = 7, account_id: str = "", currency: str = "USD") -> str:
-    """快捷查询：获取指定天数的每日广告收入汇总，返回每日明细和总计"""
+def fetch_revenue(
+    days: int = 7,
+    account_id: str = "",
+    currency: str = "USD",
+    include_today: bool = False,
+) -> str:
+    """快捷查询：获取指定天数的每日广告收入汇总，返回每日明细和总计。
+    日期范围默认截止到昨天（AdMob 当天数据未结算、不完整）；include_today=True 才纳入今天的部分数据。"""
     try:
         from auth import get_admob_service
         from admob_api import generate_network_report
@@ -240,6 +253,7 @@ def fetch_revenue(days: int = 7, account_id: str = "", currency: str = "USD") ->
             dimensions=["DATE"],
             metrics=["ESTIMATED_EARNINGS"],
             currency_code=currency,
+            include_today=include_today,
         )
 
         total = sum(

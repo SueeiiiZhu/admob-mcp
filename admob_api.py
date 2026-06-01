@@ -59,11 +59,23 @@ def _ensure_resource_name(account_id: str, prefix: str = "accounts") -> str:
     return f"{prefix}/{raw}"
 
 
-def _make_date_range(days: int) -> dict:
-    """Create date range dict for the last N days (inclusive on both ends)."""
+def _make_date_range(days: int, include_today: bool = False) -> dict:
+    """Create date range dict for the last N days (inclusive on both ends).
+
+    By default the range ENDS YESTERDAY: AdMob does not finalize the current
+    day's data (earnings are unsettled and impressions/requests lag), so
+    including today systematically understates totals. Pass include_today=True
+    to extend the end to today for near-real-time (but partial) figures.
+
+    Note: dates are computed in the server's local timezone, which may differ
+    from the AdMob account's reporting timezone; near a day boundary the range
+    can be off by one day relative to the account.
+    """
     if days < 1:
         raise ValueError("days must be >= 1")
     end = date.today()
+    if not include_today:
+        end = end - timedelta(days=1)
     start = end - timedelta(days=days - 1)
     return {
         "startDate": {"year": start.year, "month": start.month, "day": start.day},
@@ -79,8 +91,13 @@ def generate_network_report(
     metrics: Optional[list[str]] = None,
     currency_code: str = "USD",
     max_rows: int = 100000,
+    include_today: bool = False,
 ) -> dict:
-    """Generate AdMob network report. Returns rows and footer metadata."""
+    """Generate AdMob network report. Returns rows and footer metadata.
+
+    By default the date range excludes today (incomplete data); see
+    _make_date_range. Pass include_today=True for partial current-day figures.
+    """
     if dimensions is None:
         dimensions = ["DATE"]
     if metrics is None:
@@ -93,12 +110,13 @@ def generate_network_report(
             "IMPRESSION_RPM",
             "MATCHED_REQUESTS",
             "MATCH_RATE",
+            "SHOW_RATE",
         ]
 
     parent = _ensure_resource_name(account_id, "accounts")
     body = {
         "reportSpec": {
-            "dateRange": _make_date_range(days),
+            "dateRange": _make_date_range(days, include_today),
             "dimensions": dimensions,
             "metrics": metrics,
             "localizationSettings": {"currencyCode": currency_code},
@@ -122,8 +140,13 @@ def generate_mediation_report(
     metrics: Optional[list[str]] = None,
     currency_code: str = "USD",
     max_rows: int = 100000,
+    include_today: bool = False,
 ) -> dict:
-    """Generate AdMob mediation report. Returns rows and footer metadata."""
+    """Generate AdMob mediation report. Returns rows and footer metadata.
+
+    By default the date range excludes today (incomplete data); see
+    _make_date_range. Pass include_today=True for partial current-day figures.
+    """
     if dimensions is None:
         dimensions = ["DATE", "AD_SOURCE"]
     if metrics is None:
@@ -138,7 +161,7 @@ def generate_mediation_report(
     parent = _ensure_resource_name(account_id, "accounts")
     body = {
         "reportSpec": {
-            "dateRange": _make_date_range(days),
+            "dateRange": _make_date_range(days, include_today),
             "dimensions": dimensions,
             "metrics": metrics,
             "localizationSettings": {"currencyCode": currency_code},
