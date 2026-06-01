@@ -160,11 +160,13 @@ def fetch_network_report(
     currency: str = "USD",
     max_rows: int = 100000,
     include_today: bool = False,
+    timezone: str = "",
 ) -> str:
     """生成 AdMob 网络报告。
     维度(dimensions): DATE, MONTH, WEEK, AD_UNIT, APP, AD_TYPE, COUNTRY, FORMAT, PLATFORM（逗号分隔）。
     指标(metrics): ESTIMATED_EARNINGS, IMPRESSIONS, CLICKS, AD_REQUESTS, IMPRESSION_CTR, IMPRESSION_RPM, MATCHED_REQUESTS, MATCH_RATE, SHOW_RATE（逗号分隔，留空使用默认全部指标）。
     日期范围默认截止到昨天（AdMob 当天数据未结算、不完整）；include_today=True 才纳入今天的部分数据。
+    日期边界默认按账户报表时区(reportingTimeZone)判定「今天/昨天」（聚合始终按账户报表时区）；timezone 传 IANA 时区名可覆盖边界计算。
     比率类指标（IMPRESSION_CTR / MATCH_RATE / SHOW_RATE）返回 0–1 的小数，需自行 ×100 换算成百分比。"""
     try:
         from auth import get_admob_service
@@ -184,6 +186,7 @@ def fetch_network_report(
             currency_code=currency,
             max_rows=max_rows,
             include_today=include_today,
+            timezone=timezone.strip() or None,
         )
         return json.dumps(result, ensure_ascii=False, indent=2)
     except Exception as e:
@@ -200,11 +203,13 @@ def fetch_mediation_report(
     currency: str = "USD",
     max_rows: int = 100000,
     include_today: bool = False,
+    timezone: str = "",
 ) -> str:
     """生成 AdMob 中介报告，按广告源查看表现。
     维度(dimensions): DATE, MONTH, WEEK, AD_SOURCE, AD_SOURCE_INSTANCE, AD_UNIT, APP, COUNTRY, FORMAT, PLATFORM（逗号分隔）。
     指标(metrics): ESTIMATED_EARNINGS, IMPRESSIONS, CLICKS, MATCHED_REQUESTS, OBSERVED_ECPM（逗号分隔，留空使用默认指标）。
-    日期范围默认截止到昨天（AdMob 当天数据未结算、不完整）；include_today=True 才纳入今天的部分数据。"""
+    日期范围默认截止到昨天（AdMob 当天数据未结算、不完整）；include_today=True 才纳入今天的部分数据。
+    日期边界默认按账户报表时区(reportingTimeZone)判定「今天/昨天」（聚合始终按账户报表时区）；timezone 传 IANA 时区名可覆盖边界计算。"""
     try:
         from auth import get_admob_service
         from admob_api import generate_mediation_report
@@ -223,6 +228,7 @@ def fetch_mediation_report(
             currency_code=currency,
             max_rows=max_rows,
             include_today=include_today,
+            timezone=timezone.strip() or None,
         )
         return json.dumps(result, ensure_ascii=False, indent=2)
     except Exception as e:
@@ -236,9 +242,11 @@ def fetch_revenue(
     account_id: str = "",
     currency: str = "USD",
     include_today: bool = False,
+    timezone: str = "",
 ) -> str:
     """快捷查询：获取指定天数的每日广告收入汇总，返回每日明细和总计。
-    日期范围默认截止到昨天（AdMob 当天数据未结算、不完整）；include_today=True 才纳入今天的部分数据。"""
+    日期范围默认截止到昨天（AdMob 当天数据未结算、不完整）；include_today=True 才纳入今天的部分数据。
+    日期边界默认按账户报表时区(reportingTimeZone)判定「今天/昨天」；timezone 传 IANA 时区名可覆盖边界计算。"""
     try:
         from auth import get_admob_service
         from admob_api import generate_network_report
@@ -254,6 +262,7 @@ def fetch_revenue(
             metrics=["ESTIMATED_EARNINGS"],
             currency_code=currency,
             include_today=include_today,
+            timezone=timezone.strip() or None,
         )
 
         total = sum(

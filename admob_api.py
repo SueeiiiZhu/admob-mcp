@@ -1,6 +1,12 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Optional
+from zoneinfo import ZoneInfo
+
+# Cache reporting timezone per account resource name to avoid an extra
+# accounts.get RPC on every report call. None means "unknown / fall back to
+# server local timezone".
+_REPORTING_TZ_CACHE: dict[str, Optional[str]] = {}
 
 
 def list_accounts(service) -> list[dict]:
@@ -18,6 +24,25 @@ def get_account(service, account_id: str) -> dict:
     """Get a specific account by ID."""
     name = _ensure_resource_name(account_id, "accounts")
     return service.accounts().get(name=name).execute()
+
+
+def get_reporting_timezone(service, account_id: str) -> Optional[str]:
+    """Return the account's reporting timezone (IANA name), cached per account.
+
+    AdMob aggregates report data by the account's reporting timezone, so date
+    boundaries must be computed in that zone — using the server's local time
+    can shift the whole range by a day. Returns None if the account exposes no
+    timezone or the lookup fails, letting callers fall back to local time.
+    """
+    name = _ensure_resource_name(account_id, "accounts")
+    if name in _REPORTING_TZ_CACHE:
+        return _REPORTING_TZ_CACHE[name]
+    try:
+        tz = get_account(service, account_id).get("reportingTimeZone") or None
+    except Exception:
+        tz = None
+    _REPORTING_TZ_CACHE[name] = tz
+    return tz
 
 
 def list_apps(service, account_id: str) -> list[dict]:
@@ -59,7 +84,23 @@ def _ensure_resource_name(account_id: str, prefix: str = "accounts") -> str:
     return f"{prefix}/{raw}"
 
 
-def _make_date_range(days: int, include_today: bool = False) -> dict:
+def _today_in(tz: Optional[str]) -> date:
+    """Current calendar date in the given IANA timezone, or local date.
+
+    Falls back to the server's local date if tz is empty or unresolvable
+    (e.g. missing tz database), so a bad timezone never breaks reporting.
+    """
+    if tz:
+        try:
+            return datetime.now(ZoneInfo(tz)).date()
+        except Exception:
+            pass
+    return date.today()
+
+
+def _make_date_range(
+    days: int, include_today: bool = False, tz: Optional[str] = None
+) -> dict:
     """Create date range dict for the last N days (inclusive on both ends).
 
     By default the range ENDS YESTERDAY: AdMob does not finalize the current
@@ -67,13 +108,13 @@ def _make_date_range(days: int, include_today: bool = False) -> dict:
     including today systematically understates totals. Pass include_today=True
     to extend the end to today for near-real-time (but partial) figures.
 
-    Note: dates are computed in the server's local timezone, which may differ
-    from the AdMob account's reporting timezone; near a day boundary the range
-    can be off by one day relative to the account.
+    `tz` is the IANA reporting timezone used to decide which calendar day
+    "today"/"yesterday" is; it should match the account's reporting timezone
+    so boundaries align with how AdMob aggregates. None uses server local time.
     """
     if days < 1:
         raise ValueError("days must be >= 1")
-    end = date.today()
+    end = _today_in(tz)
     if not include_today:
         end = end - timedelta(days=1)
     start = end - timedelta(days=days - 1)
@@ -92,11 +133,19 @@ def generate_network_report(
     currency_code: str = "USD",
     max_rows: int = 100000,
     include_today: bool = False,
+    timezone: Optional[str] = None,
 ) -> dict:
     """Generate AdMob network report. Returns rows and footer metadata.
 
     By default the date range excludes today (incomplete data); see
     _make_date_range. Pass include_today=True for partial current-day figures.
+
+    timezone: IANA timezone used to pick which calendar days the range covers
+    (today/yesterday boundaries). None (default) auto-resolves the account's
+    reporting timezone so boundaries match how AdMob settles data. Aggregation
+    itself always follows the account's reporting timezone — reportSpec.timeZone
+    is intentionally NOT set, since the API currently only accepts
+    "America/Los_Angeles" there and defaults to the account zone otherwise.
     """
     if dimensions is None:
         dimensions = ["DATE"]
@@ -114,19 +163,18 @@ def generate_network_report(
         ]
 
     parent = _ensure_resource_name(account_id, "accounts")
-    body = {
-        "reportSpec": {
-            "dateRange": _make_date_range(days, include_today),
-            "dimensions": dimensions,
-            "metrics": metrics,
-            "localizationSettings": {"currencyCode": currency_code},
-            "maxReportRows": max_rows,
-        }
+    tz = timezone if timezone is not None else get_reporting_timezone(service, account_id)
+    report_spec = {
+        "dateRange": _make_date_range(days, include_today, tz),
+        "dimensions": dimensions,
+        "metrics": metrics,
+        "localizationSettings": {"currencyCode": currency_code},
+        "maxReportRows": max_rows,
     }
     response = (
         service.accounts()
         .networkReport()
-        .generate(parent=parent, body=body)
+        .generate(parent=parent, body={"reportSpec": report_spec})
         .execute()
     )
     return _parse_report_response(response)
@@ -141,11 +189,19 @@ def generate_mediation_report(
     currency_code: str = "USD",
     max_rows: int = 100000,
     include_today: bool = False,
+    timezone: Optional[str] = None,
 ) -> dict:
     """Generate AdMob mediation report. Returns rows and footer metadata.
 
     By default the date range excludes today (incomplete data); see
     _make_date_range. Pass include_today=True for partial current-day figures.
+
+    timezone: IANA timezone used to pick which calendar days the range covers
+    (today/yesterday boundaries). None (default) auto-resolves the account's
+    reporting timezone so boundaries match how AdMob settles data. Aggregation
+    itself always follows the account's reporting timezone — reportSpec.timeZone
+    is intentionally NOT set, since the API currently only accepts
+    "America/Los_Angeles" there and defaults to the account zone otherwise.
     """
     if dimensions is None:
         dimensions = ["DATE", "AD_SOURCE"]
@@ -159,19 +215,18 @@ def generate_mediation_report(
         ]
 
     parent = _ensure_resource_name(account_id, "accounts")
-    body = {
-        "reportSpec": {
-            "dateRange": _make_date_range(days, include_today),
-            "dimensions": dimensions,
-            "metrics": metrics,
-            "localizationSettings": {"currencyCode": currency_code},
-            "maxReportRows": max_rows,
-        }
+    tz = timezone if timezone is not None else get_reporting_timezone(service, account_id)
+    report_spec = {
+        "dateRange": _make_date_range(days, include_today, tz),
+        "dimensions": dimensions,
+        "metrics": metrics,
+        "localizationSettings": {"currencyCode": currency_code},
+        "maxReportRows": max_rows,
     }
     response = (
         service.accounts()
         .mediationReport()
-        .generate(parent=parent, body=body)
+        .generate(parent=parent, body={"reportSpec": report_spec})
         .execute()
     )
     return _parse_report_response(response)

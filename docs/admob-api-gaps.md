@@ -81,7 +81,8 @@ python3 -c "import urllib.request, json; \
 `fetch_network_report` / `fetch_mediation_report` / `fetch_revenue` 共用 `_make_date_range`：
 
 - **默认排除当天**：AdMob 当天数据未结算（收入未定、曝光/请求有延迟），纳入后整体偏低。实测当天收入/曝光约为平日的 ~65%。本仓库默认 `endDate = 昨天`，`days` 从昨天往前算；要看今天的部分数据传 `include_today=True`。
-- **时区**：日期按**运行 MCP server 的本地时区**计算，而 AdMob 报表按**账户的报表时区**结算。跨日界时整个 dateRange 可能整体偏移一天。完整修复需读账户 `reportingTimeZone`，目前未做。
+- **时区**：日期边界（今天/昨天）按**账户报表时区**（`accounts.get` 的 `reportingTimeZone`，本仓库自动获取并按 account 缓存）判定，避免用 server 本地时区导致整段 dateRange 偏移一天。`timezone` 参数可覆盖边界计算所用时区，拿不到/解析失败时回退本地时区。
+  - **坑**：`reportSpec.timeZone` 字段当前**只接受 `America/Los_Angeles`**（discovery doc 明确警告），传账户真实时区如 `Asia/Shanghai` 会被拒。因此本仓库**不设置** `reportSpec.timeZone`——聚合本就默认按账户报表时区，时区只用于客户端选定日历日。
 - **比率指标是 0–1 小数**：`IMPRESSION_CTR` / `MATCH_RATE` / `SHOW_RATE` 走 `doubleValue`，返回 `0.045` 这类小数（=4.5%），不是百分比，需自行 ×100。货币类（`ESTIMATED_EARNINGS` / `IMPRESSION_RPM` / `OBSERVED_ECPM`）走 `microsValue`，已在解析时 /1e6 转成字符串小数。
 
 ## 7. 写权限的 OAuth scope
